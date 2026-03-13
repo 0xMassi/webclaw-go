@@ -1,6 +1,20 @@
-# webclaw-go
+<p align="center">
+  <a href="https://webclaw.io">
+    <img src=".github/banner.png" alt="webclaw" width="600" />
+  </a>
+</p>
 
-Go SDK for the [Webclaw](https://webclaw.io) web extraction API.
+<p align="center">
+  <strong>Go SDK for the Webclaw web extraction API</strong>
+</p>
+
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/0xMassi/webclaw-go"><img src="https://img.shields.io/badge/go-reference-212529?style=flat-square" alt="Go Reference" /></a>
+  <a href="https://github.com/0xMassi/webclaw-go/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-212529?style=flat-square" alt="License" /></a>
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/go-%3E%3D1.21-212529?style=flat-square" alt="Go 1.21+" /></a>
+</p>
+
+---
 
 ## Installation
 
@@ -34,7 +48,7 @@ func main() {
 }
 ```
 
-## API Reference
+## Endpoints
 
 ### Scrape
 
@@ -53,7 +67,7 @@ result, err := client.Scrape(ctx, webclaw.ScrapeRequest{
 
 ### Crawl
 
-Start an async crawl job and poll for results.
+Start an async crawl and poll for results.
 
 ```go
 job, err := client.Crawl(ctx, webclaw.CrawlRequest{
@@ -62,15 +76,9 @@ job, err := client.Crawl(ctx, webclaw.CrawlRequest{
     MaxPages:   100,
     UseSitemap: true,
 })
-if err != nil {
-    panic(err)
-}
 
-// Poll until complete (2s interval, 5min timeout)
+// Poll until complete
 status, err := client.WaitForCrawl(ctx, job.ID, 2*time.Second, 5*time.Minute)
-if err != nil {
-    panic(err)
-}
 
 for _, page := range status.Pages {
     fmt.Println(page.URL, len(page.Markdown))
@@ -79,13 +87,10 @@ for _, page := range status.Pages {
 
 ### Map
 
-Discover URLs via sitemap parsing.
+Discover URLs via sitemap.
 
 ```go
-result, err := client.Map(ctx, webclaw.MapRequest{
-    URL: "https://example.com",
-})
-fmt.Println(result.Count)
+result, err := client.Map(ctx, webclaw.MapRequest{URL: "https://example.com"})
 for _, u := range result.URLs {
     fmt.Println(u)
 }
@@ -116,7 +121,6 @@ result, err := client.Extract(ctx, webclaw.ExtractRequest{
     URL:    "https://example.com/pricing",
     Schema: json.RawMessage(`{"type":"object","properties":{"plans":{"type":"array"}}}`),
 })
-fmt.Println(string(result.Data))
 
 // Prompt-based
 result, err = client.Extract(ctx, webclaw.ExtractRequest{
@@ -140,9 +144,7 @@ fmt.Println(result.Summary)
 Extract brand identity (colors, fonts, logos).
 
 ```go
-result, err := client.Brand(ctx, webclaw.BrandRequest{
-    URL: "https://example.com",
-})
+result, err := client.Brand(ctx, webclaw.BrandRequest{URL: "https://example.com"})
 fmt.Println(string(result.Data))
 ```
 
@@ -169,16 +171,12 @@ client := webclaw.NewClient(
 )
 ```
 
-## Design
+## Highlights
 
-- Zero dependencies beyond the standard library
+- Zero dependencies beyond `net/http`
 - `context.Context` on every method
-- Functional options pattern for client configuration
-- All API errors returned as `*APIError` with status code
-
-## Requirements
-
-- Go 1.21+
+- Functional options pattern
+- All errors are `*APIError` with status codes
 
 ## License
 
