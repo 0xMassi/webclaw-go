@@ -3,6 +3,8 @@ package webclaw
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 )
 
 // WatchCreateRequest configures a new URL watch monitor.
@@ -67,7 +69,11 @@ func (c *Client) WatchCreate(ctx context.Context, req *WatchCreateRequest) (*Wat
 
 // WatchList returns the authenticated user's watches with pagination.
 func (c *Client) WatchList(ctx context.Context, limit, offset int) (*WatchListResponse, error) {
-	path := fmt.Sprintf("/v1/watch?limit=%d&offset=%d", limit, offset)
+	q := url.Values{}
+	q.Set("limit", strconv.Itoa(limit))
+	q.Set("offset", strconv.Itoa(offset))
+	path := "/v1/watch?" + q.Encode()
+
 	var resp WatchListResponse
 	if err := c.do(ctx, "GET", path, nil, &resp); err != nil {
 		return nil, err

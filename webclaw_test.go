@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -181,7 +182,9 @@ func TestCrawl_StartAndPoll(t *testing.T) {
 		t.Errorf("ID = %q", start.ID)
 	}
 
-	result, err := client.WaitForCompletion(context.Background(), start.ID, 50*time.Millisecond)
+	result, err := client.WaitForCompletion(context.Background(), start.ID, &CrawlPollOptions{
+		Interval: 50 * time.Millisecond,
+	})
 	if err != nil {
 		t.Fatalf("WaitForCompletion: %v", err)
 	}
@@ -202,9 +205,45 @@ func TestWaitForCompletion_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err := client.WaitForCompletion(ctx, "job-1", 30*time.Millisecond)
+	_, err := client.WaitForCompletion(ctx, "job-1", &CrawlPollOptions{
+		Interval: 30 * time.Millisecond,
+	})
 	if err == nil {
 		t.Fatal("expected context error")
+	}
+	if err != context.DeadlineExceeded {
+		t.Errorf("err = %v, want DeadlineExceeded", err)
+	}
+}
+
+func TestWaitForCompletion_NilOptions(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(CrawlStatusResponse{
+			ID: "job-nil", Status: CrawlStatusCompleted,
+			Total: 1, Completed: 1,
+		})
+	})
+
+	result, err := client.WaitForCompletion(context.Background(), "job-nil", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Status != CrawlStatusCompleted {
+		t.Errorf("Status = %q, want completed", result.Status)
+	}
+}
+
+func TestWaitForCompletion_WithTimeout(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(CrawlStatusResponse{ID: "job-slow", Status: CrawlStatusRunning})
+	})
+
+	_, err := client.WaitForCompletion(context.Background(), "job-slow", &CrawlPollOptions{
+		Interval: 30 * time.Millisecond,
+		Timeout:  100 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("expected timeout error")
 	}
 	if err != context.DeadlineExceeded {
 		t.Errorf("err = %v, want DeadlineExceeded", err)
@@ -219,7 +258,9 @@ func TestWaitForCompletion_FailedJob(t *testing.T) {
 		})
 	})
 
-	result, err := client.WaitForCompletion(context.Background(), "job-fail", 50*time.Millisecond)
+	result, err := client.WaitForCompletion(context.Background(), "job-fail", &CrawlPollOptions{
+		Interval: 50 * time.Millisecond,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -567,5 +608,54 @@ func TestBrandResponse_Decode_NilData(t *testing.T) {
 	var dst struct{}
 	if err := resp.Decode(&dst); err == nil {
 		t.Error("expected error for nil data")
+	}
+}
+
+// --- Example functions for godoc ---
+
+func ExampleClient_Scrape() {
+	client := NewClient("your-api-key")
+	resp, err := client.Scrape(context.Background(), &ScrapeRequest{
+		URL:     "https://example.com",
+		Formats: []Format{FormatMarkdown},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(resp.Markdown)
+}
+
+func ExampleClient_Crawl() {
+	client := NewClient("your-api-key")
+	start, err := client.Crawl(context.Background(), &CrawlRequest{
+		URL:      "https://example.com",
+		MaxDepth: 2,
+		MaxPages: 10,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	result, err := client.WaitForCompletion(context.Background(), start.ID, &CrawlPollOptions{
+		Interval: 2 * time.Second,
+		Timeout:  5 * time.Minute,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Crawled %d pages\n", result.Completed)
+}
+
+func ExampleClient_Search() {
+	client := NewClient("your-api-key")
+	resp, err := client.Search(context.Background(), &SearchRequest{
+		Query:      "golang web scraping",
+		NumResults: 5,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, r := range resp.Results {
+		fmt.Printf("%d. %s - %s\n", r.Position, r.Title, r.URL)
 	}
 }
