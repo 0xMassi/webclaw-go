@@ -7,32 +7,43 @@ import "encoding/json"
 type Format string
 
 const (
+	// FormatMarkdown requests Markdown output.
 	FormatMarkdown Format = "markdown"
-	FormatText     Format = "text"
-	FormatLLM      Format = "llm"
-	FormatJSON     Format = "json"
+	// FormatText requests plain-text output.
+	FormatText Format = "text"
+	// FormatLLM requests LLM-optimized output (compressed markdown).
+	FormatLLM Format = "llm"
+	// FormatJSON requests structured JSON output.
+	FormatJSON Format = "json"
 )
 
 // CrawlStatus represents the state of an async crawl job.
 type CrawlStatus string
 
 const (
-	CrawlStatusRunning   CrawlStatus = "running"
+	// CrawlStatusRunning indicates the crawl is still in progress.
+	CrawlStatusRunning CrawlStatus = "running"
+	// CrawlStatusCompleted indicates the crawl finished successfully.
 	CrawlStatusCompleted CrawlStatus = "completed"
-	CrawlStatusFailed    CrawlStatus = "failed"
+	// CrawlStatusFailed indicates the crawl encountered an unrecoverable error.
+	CrawlStatusFailed CrawlStatus = "failed"
 )
 
-// CacheStatus represents whether a scrape result was cached.
+// CacheStatus represents whether a scrape result was served from cache.
 type CacheStatus string
 
 const (
-	CacheHit    CacheStatus = "hit"
-	CacheMiss   CacheStatus = "miss"
+	// CacheHit means the response was served from cache.
+	CacheHit CacheStatus = "hit"
+	// CacheMiss means no cached entry existed and a fresh fetch was performed.
+	CacheMiss CacheStatus = "miss"
+	// CacheBypass means caching was explicitly skipped via NoCache.
 	CacheBypass CacheStatus = "bypass"
 )
 
 // --- Scrape ---
 
+// ScrapeRequest configures a single URL scrape.
 type ScrapeRequest struct {
 	URL              string   `json:"url"`
 	Formats          []Format `json:"formats,omitempty"`
@@ -42,10 +53,12 @@ type ScrapeRequest struct {
 	NoCache          bool     `json:"no_cache,omitempty"`
 }
 
+// CacheInfo describes the cache status of a scrape response.
 type CacheInfo struct {
 	Status CacheStatus `json:"status"`
 }
 
+// ScrapeResponse contains the extracted content from a scrape.
 type ScrapeResponse struct {
 	URL      string          `json:"url"`
 	Metadata json.RawMessage `json:"metadata,omitempty"`
@@ -58,6 +71,7 @@ type ScrapeResponse struct {
 
 // --- Crawl ---
 
+// CrawlRequest configures an async crawl job.
 type CrawlRequest struct {
 	URL        string `json:"url"`
 	MaxDepth   int    `json:"max_depth,omitempty"`
@@ -65,11 +79,13 @@ type CrawlRequest struct {
 	UseSitemap bool   `json:"use_sitemap,omitempty"`
 }
 
+// CrawlStartResponse is returned when a crawl job is created.
 type CrawlStartResponse struct {
 	ID     string      `json:"id"`
 	Status CrawlStatus `json:"status"`
 }
 
+// CrawlPage holds the extracted content for one page in a crawl.
 type CrawlPage struct {
 	URL      string          `json:"url"`
 	Markdown string          `json:"markdown,omitempty"`
@@ -77,6 +93,7 @@ type CrawlPage struct {
 	Error    string          `json:"error,omitempty"`
 }
 
+// CrawlStatusResponse contains the current state and results of a crawl job.
 type CrawlStatusResponse struct {
 	ID        string      `json:"id"`
 	Status    CrawlStatus `json:"status"`
@@ -88,10 +105,12 @@ type CrawlStatusResponse struct {
 
 // --- Map ---
 
+// MapRequest configures a sitemap URL discovery request.
 type MapRequest struct {
 	URL string `json:"url"`
 }
 
+// MapResponse contains the discovered URLs from a sitemap.
 type MapResponse struct {
 	URLs  []string `json:"urls"`
 	Count int      `json:"count"`
@@ -99,12 +118,14 @@ type MapResponse struct {
 
 // --- Batch ---
 
+// BatchRequest configures a multi-URL parallel scrape.
 type BatchRequest struct {
 	URLs        []string `json:"urls"`
 	Formats     []Format `json:"formats,omitempty"`
 	Concurrency int      `json:"concurrency,omitempty"`
 }
 
+// BatchResult holds the extracted content for one URL in a batch.
 type BatchResult struct {
 	URL      string          `json:"url"`
 	Markdown string          `json:"markdown,omitempty"`
@@ -112,35 +133,41 @@ type BatchResult struct {
 	Error    string          `json:"error,omitempty"`
 }
 
+// BatchResponse contains the results of a batch scrape.
 type BatchResponse struct {
 	Results []BatchResult `json:"results"`
 }
 
 // --- Extract ---
 
+// ExtractRequest configures an LLM-powered data extraction.
 type ExtractRequest struct {
 	URL    string          `json:"url"`
 	Schema json.RawMessage `json:"schema,omitempty"`
 	Prompt string          `json:"prompt,omitempty"`
 }
 
+// ExtractResponse contains the structured data returned by extraction.
 type ExtractResponse struct {
 	Data json.RawMessage `json:"data"`
 }
 
 // --- Summarize ---
 
+// SummarizeRequest configures a page summarization request.
 type SummarizeRequest struct {
 	URL          string `json:"url"`
 	MaxSentences int    `json:"max_sentences,omitempty"`
 }
 
+// SummarizeResponse contains the generated summary.
 type SummarizeResponse struct {
 	Summary string `json:"summary"`
 }
 
 // --- Brand ---
 
+// BrandRequest configures a brand identity extraction request.
 type BrandRequest struct {
 	URL string `json:"url"`
 }

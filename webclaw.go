@@ -101,14 +101,18 @@ func (c *Client) do(ctx context.Context, method, path string, body any, dst any)
 			Message string `json:"message"`
 			Error   string `json:"error"`
 		}
-		if json.Unmarshal(respBody, &errResp) == nil {
+		if json.Unmarshal(respBody, &errResp) == nil && (errResp.Message != "" || errResp.Error != "") {
 			if errResp.Message != "" {
 				apiErr.Message = errResp.Message
-			} else if errResp.Error != "" {
+			} else {
 				apiErr.Message = errResp.Error
 			}
-		}
-		if apiErr.Message == "" {
+		} else if len(respBody) > 0 {
+			// Unmarshal succeeded but both fields were empty (e.g. body was
+			// "true", "42", or an object with different field names), or
+			// unmarshal failed entirely. Use the raw body as the message.
+			apiErr.Message = string(respBody)
+		} else {
 			apiErr.Message = http.StatusText(resp.StatusCode)
 		}
 		return apiErr
