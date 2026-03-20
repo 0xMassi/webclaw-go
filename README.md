@@ -148,6 +148,36 @@ result, err := client.Brand(ctx, webclaw.BrandRequest{URL: "https://example.com"
 fmt.Println(string(result.Data))
 ```
 
+### Search
+
+Web search with optional scraping of results.
+
+```go
+resp, err := client.Search(ctx, &webclaw.SearchRequest{
+    Query: "web scraping tools 2026",
+})
+for _, r := range resp.Results {
+    fmt.Println(r.Title, r.URL)
+}
+```
+
+### Research
+
+Start an async deep research job and poll for results.
+
+```go
+// Start a research job
+job, err := client.Research(ctx, &webclaw.ResearchRequest{
+    Query:      "How do modern web crawlers handle JavaScript rendering?",
+    MaxSources: 15,
+    Deep:       true,
+})
+
+// Poll until done
+result, err := client.WaitForResearch(ctx, job.ID, nil)
+fmt.Println(result.Report)
+```
+
 ## Error Handling
 
 ```go
