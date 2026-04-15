@@ -236,26 +236,6 @@ if err != nil {
 fmt.Println(result.Changes)
 ```
 
-### Agent Scrape
-
-AI-guided scraping. Provide a goal and the agent navigates, clicks, and extracts data across multiple steps.
-
-```go
-result, err := client.AgentScrape(ctx, &webclaw.AgentScrapeRequest{
-    URL:      "https://example.com/products",
-    Goal:     "Find the price and specs of the top 3 products",
-    MaxSteps: 10,
-})
-if err != nil {
-    log.Fatal(err)
-}
-fmt.Printf("Completed in %d steps\n", result.TotalSteps)
-fmt.Println(result.Data)
-for _, step := range result.Steps {
-    fmt.Printf("Step %d: %v\n", step.Step, step.Action)
-}
-```
-
 ### Research
 
 Start an async deep research job and poll for results. Research can take several minutes depending on the query and configuration.
@@ -435,7 +415,6 @@ if err != nil {
 | `Summarize` | `(ctx, *SummarizeRequest) (*SummarizeResponse, error)` | Page summarization |
 | `Brand` | `(ctx, *BrandRequest) (*BrandResponse, error)` | Brand identity extraction |
 | `Diff` | `(ctx, *DiffRequest) (*DiffResponse, error)` | Content change detection |
-| `AgentScrape` | `(ctx, *AgentScrapeRequest) (*AgentScrapeResponse, error)` | AI-guided scraping |
 | `Research` | `(ctx, *ResearchRequest) (*ResearchStartResponse, error)` | Start research job |
 | `GetResearchStatus` | `(ctx, id) (*ResearchResponse, error)` | Poll research status |
 | `WaitForResearch` | `(ctx, id, *ResearchPollOptions) (*ResearchResponse, error)` | Block until research completes |
