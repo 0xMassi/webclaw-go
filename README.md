@@ -100,6 +100,30 @@ fmt.Println(result.Markdown)
 fmt.Println(result.Cache.Status) // "hit", "miss", or "bypass"
 ```
 
+### Vertical extractors
+
+28 site-specific extractors that return typed JSON (GitHub, Reddit, Amazon, YouTube, PyPI, HuggingFace, Trustpilot, etc.) instead of generic markdown. See the [catalog](https://webclaw.io/docs/api/vertical) for the full list.
+
+```go
+// Discover available extractors
+catalog, err := client.ListExtractors(ctx)
+if err != nil { log.Fatal(err) }
+for _, e := range catalog.Extractors {
+    fmt.Println(e.Name, "-", e.Label)
+}
+
+// Run a specific extractor
+pr, err := client.ScrapeVertical(
+    ctx,
+    "github_pr",
+    "https://github.com/rust-lang/rust/pull/123456",
+)
+if err != nil { log.Fatal(err) }
+fmt.Println(pr.Data) // map[string]any with title, state, author, etc.
+```
+
+The `Data` field is `map[string]any`; consult `ListExtractors` for the fields each extractor returns.
+
 ### Search
 
 Web search with optional scraping of results.
