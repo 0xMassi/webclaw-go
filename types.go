@@ -58,6 +58,27 @@ type CacheInfo struct {
 	Status CacheStatus `json:"status"`
 }
 
+// YouTubeData holds structured metadata for a YouTube watch URL,
+// populated by /v1/scrape via the server's yt-dlp short-circuit
+// (preferred) or the standard pipeline's vertical YouTube extractor
+// (Transcript will be empty on the fallback path).
+type YouTubeData struct {
+	VideoID         string   `json:"video_id,omitempty"`
+	Title           string   `json:"title,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	Channel         string   `json:"channel,omitempty"`
+	ChannelURL      string   `json:"channel_url,omitempty"`
+	Uploader        string   `json:"uploader,omitempty"`
+	UploadDate      string   `json:"upload_date,omitempty"` // YYYYMMDD
+	DurationSeconds int      `json:"duration_seconds,omitempty"`
+	ViewCount       int      `json:"view_count,omitempty"`
+	LikeCount       int      `json:"like_count,omitempty"`
+	Thumbnail       string   `json:"thumbnail,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	Categories      []string `json:"categories,omitempty"`
+	Language        string   `json:"language,omitempty"`
+}
+
 // ScrapeResponse contains the extracted content from a scrape.
 type ScrapeResponse struct {
 	URL      string          `json:"url"`
@@ -67,6 +88,13 @@ type ScrapeResponse struct {
 	LLM      string          `json:"llm,omitempty"`
 	Cache    CacheInfo       `json:"cache"`
 	Warning  string          `json:"warning,omitempty"`
+	// YouTube is set when the URL is youtube.com/watch, /shorts, or
+	// youtu.be. Carries channel, duration, view count, tags, etc.
+	YouTube *YouTubeData `json:"youtube,omitempty"`
+	// Transcript carries the auto-caption text (newline-joined). Only
+	// present when the yt-dlp short-circuit fired and the video has
+	// captions.
+	Transcript string `json:"transcript,omitempty"`
 }
 
 // --- Crawl ---
