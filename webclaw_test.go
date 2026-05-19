@@ -314,6 +314,116 @@ func TestMap_Success(t *testing.T) {
 	}
 }
 
+// --- Endpoints ---
+
+func TestEndpoints_Success(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		if r.URL.Path != "/v1/endpoints" || r.Method != "POST" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+
+		var req EndpointsRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.URL != "https://example.com" {
+			t.Errorf("req.URL = %q", req.URL)
+		}
+
+		json.NewEncoder(w).Encode(EndpointsResponse{
+			URL:            "https://example.com",
+			BundlesScanned: 4,
+			EndpointCount:  3,
+			Endpoints: []DiscoveredEndpoint{
+				{Value: "/api/users", Kind: EndpointKindRelativePath, FirstParty: true, Source: "inline"},
+				{Value: "https://api.example.com/v2", Kind: EndpointKindAbsoluteURL, FirstParty: true, Source: "app.js"},
+				{Value: "wss://live.example.com/socket", Kind: EndpointKindWebSocket, FirstParty: false, Source: "app.js"},
+			},
+			Hosts:     []string{"api.example.com", "live.example.com"},
+			Truncated: false,
+		})
+	})
+
+	resp, err := client.Endpoints(context.Background(), &EndpointsRequest{
+		URL: "https://example.com",
+	})
+	if err != nil {
+		t.Fatalf("Endpoints: %v", err)
+	}
+	if resp.BundlesScanned != 4 {
+		t.Errorf("BundlesScanned = %d", resp.BundlesScanned)
+	}
+	if resp.EndpointCount != 3 || len(resp.Endpoints) != 3 {
+		t.Errorf("EndpointCount = %d, len(Endpoints) = %d", resp.EndpointCount, len(resp.Endpoints))
+	}
+	if resp.Endpoints[0].Kind != EndpointKindRelativePath {
+		t.Errorf("Endpoints[0].Kind = %q", resp.Endpoints[0].Kind)
+	}
+	if resp.Endpoints[2].Kind != EndpointKindWebSocket || resp.Endpoints[2].FirstParty {
+		t.Errorf("Endpoints[2] = %+v", resp.Endpoints[2])
+	}
+	if len(resp.Hosts) != 2 {
+		t.Errorf("Hosts = %v", resp.Hosts)
+	}
+}
+
+func TestEndpoints_Params(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		var req EndpointsRequest
+		json.NewDecoder(r.Body).Decode(&req)
+
+		if !req.IncludeThirdParty {
+			t.Error("IncludeThirdParty should be true")
+		}
+		if req.MaxBundles != 20 {
+			t.Errorf("MaxBundles = %d, want 20", req.MaxBundles)
+		}
+
+		json.NewEncoder(w).Encode(EndpointsResponse{
+			URL:           req.URL,
+			EndpointCount: 0,
+			Endpoints:     []DiscoveredEndpoint{},
+			Truncated:     true,
+		})
+	})
+
+	resp, err := client.Endpoints(context.Background(), &EndpointsRequest{
+		URL:               "https://example.com",
+		IncludeThirdParty: true,
+		MaxBundles:        20,
+	})
+	if err != nil {
+		t.Fatalf("Endpoints: %v", err)
+	}
+	if !resp.Truncated {
+		t.Error("Truncated should be true")
+	}
+}
+
+func TestEndpoints_BadRequest(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(map[string]string{"error": "url is required"})
+	})
+
+	_, err := client.Endpoints(context.Background(), &EndpointsRequest{URL: ""})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 400 {
+		t.Errorf("StatusCode = %d, want 400", apiErr.StatusCode)
+	}
+	if apiErr.Message != "url is required" {
+		t.Errorf("Message = %q, want 'url is required'", apiErr.Message)
+	}
+}
+
 // --- Batch ---
 
 func TestBatch_Success(t *testing.T) {
@@ -676,6 +786,20 @@ func ExampleClient_Crawl() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Crawled %d pages\n", result.Completed)
+}
+
+func ExampleClient_Endpoints() {
+	client := NewClient("your-api-key")
+	resp, err := client.Endpoints(context.Background(), &EndpointsRequest{
+		URL:               "https://example.com",
+		IncludeThirdParty: false,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, ep := range resp.Endpoints {
+		fmt.Printf("%s (%s)\n", ep.Value, ep.Kind)
+	}
 }
 
 func ExampleClient_Search() {
