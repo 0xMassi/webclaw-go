@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -571,6 +572,37 @@ func TestIsHelpers_NonAPIError(t *testing.T) {
 	}
 	if IsNotFound(err) {
 		t.Error("IsNotFound should return false for non-APIError")
+	}
+}
+
+func TestIsHelpers_WrappedAPIError(t *testing.T) {
+	wrapped := fmt.Errorf("call failed: %w", &APIError{StatusCode: 401})
+	if !IsAuthError(wrapped) {
+		t.Error("IsAuthError should unwrap and match a wrapped *APIError")
+	}
+	if IsNotFound(wrapped) {
+		t.Error("IsNotFound should not match a wrapped 401")
+	}
+}
+
+func TestAPIError_RawBodyTruncated(t *testing.T) {
+	// Non-JSON body longer than the cap must not be copied verbatim.
+	huge := strings.Repeat("A", 5000)
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(502)
+		w.Write([]byte(huge))
+	})
+
+	_, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://x.com"})
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if len(apiErr.Message) > maxErrBodyLen+len("… (truncated)") {
+		t.Errorf("Message length = %d, expected capped near %d", len(apiErr.Message), maxErrBodyLen)
+	}
+	if !strings.HasSuffix(apiErr.Message, "(truncated)") {
+		t.Errorf("expected truncation marker, got tail %q", apiErr.Message[len(apiErr.Message)-20:])
 	}
 }
 

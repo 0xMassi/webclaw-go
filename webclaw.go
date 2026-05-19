@@ -14,7 +14,20 @@ import (
 const (
 	defaultBaseURL = "https://api.webclaw.io"
 	defaultTimeout = 30 * time.Second
+
+	// maxErrBodyLen caps how many bytes of a raw, unparseable upstream
+	// response body are copied into an APIError message.
+	maxErrBodyLen = 512
 )
+
+// truncate returns s shortened to at most max bytes, appending an ellipsis
+// marker when content was dropped.
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "… (truncated)"
+}
 
 // Client communicates with the webclaw API.
 type Client struct {
@@ -110,8 +123,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, dst any)
 		} else if len(respBody) > 0 {
 			// Unmarshal succeeded but both fields were empty (e.g. body was
 			// "true", "42", or an object with different field names), or
-			// unmarshal failed entirely. Use the raw body as the message.
-			apiErr.Message = string(respBody)
+			// unmarshal failed entirely. Use the raw body as the message,
+			// capped so a misbehaving upstream can't bloat the error string.
+			apiErr.Message = truncate(string(respBody), maxErrBodyLen)
 		} else {
 			apiErr.Message = http.StatusText(resp.StatusCode)
 		}
