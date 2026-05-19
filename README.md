@@ -159,6 +159,31 @@ for _, u := range result.URLs {
 }
 ```
 
+### Endpoints
+
+Discover API endpoints embedded in a page's inline JavaScript and linked `<script src>` bundles -- references a sitemap-based `Map` cannot reach.
+
+```go
+result, err := client.Endpoints(ctx, &webclaw.EndpointsRequest{
+    URL:               "https://example.com",
+    IncludeThirdParty: false, // first-party hosts only (default)
+    MaxBundles:        20,    // cap external bundles scanned (max 20)
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Scanned %d bundles, found %d endpoints\n", result.BundlesScanned, result.EndpointCount)
+for _, ep := range result.Endpoints {
+    fmt.Printf("%s [%s] first_party=%v src=%s\n", ep.Value, ep.Kind, ep.FirstParty, ep.Source)
+}
+fmt.Println("Hosts:", result.Hosts)
+if result.Truncated {
+    fmt.Println("Results truncated -- raise MaxBundles or narrow the target")
+}
+```
+
+`Kind` is one of `relative_path`, `absolute_url`, `graph_ql`, or `web_socket`.
+
 ### Batch
 
 Scrape multiple URLs in parallel.
@@ -434,6 +459,7 @@ if err != nil {
 | `Scrape` | `(ctx, *ScrapeRequest) (*ScrapeResponse, error)` | Extract content from a URL |
 | `Search` | `(ctx, *SearchRequest) (*SearchResponse, error)` | Web search |
 | `Map` | `(ctx, *MapRequest) (*MapResponse, error)` | Discover URLs via sitemap |
+| `Endpoints` | `(ctx, *EndpointsRequest) (*EndpointsResponse, error)` | Discover API endpoints in page JS |
 | `Batch` | `(ctx, *BatchRequest) (*BatchResponse, error)` | Multi-URL parallel scrape |
 | `Extract` | `(ctx, *ExtractRequest) (*ExtractResponse, error)` | LLM structured extraction |
 | `Summarize` | `(ctx, *SummarizeRequest) (*SummarizeResponse, error)` | Page summarization |
