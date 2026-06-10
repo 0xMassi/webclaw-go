@@ -46,16 +46,24 @@ func WithBaseURL(url string) Option {
 	}
 }
 
-// WithTimeout sets the HTTP client timeout.
+// WithTimeout sets the HTTP client timeout. It applies onto whatever client
+// is currently set, so order relative to WithHTTPClient does not matter.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Client) {
+		if c.http == nil {
+			c.http = &http.Client{}
+		}
 		c.http.Timeout = d
 	}
 }
 
-// WithHTTPClient replaces the default HTTP client entirely.
+// WithHTTPClient replaces the default HTTP client entirely. A nil argument is
+// ignored so the client always keeps a usable (non-nil) http.Client.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
+		if hc == nil {
+			return
+		}
 		c.http = hc
 	}
 }

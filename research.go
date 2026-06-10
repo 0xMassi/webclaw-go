@@ -74,22 +74,22 @@ type ResearchPollOptions struct {
 	Timeout  time.Duration
 }
 
-// WaitForResearch polls a research job until it completes or times out.
-// Default: 2s poll interval, 600s (10 minute) timeout.
+// WaitForResearch polls a research job until it reaches a terminal state
+// (completed or failed) or the context is cancelled. Pass nil for defaults
+// (2s interval, no timeout beyond the parent context). Set opts.Timeout to
+// bound the wait; otherwise the caller's context controls deadlines.
 func (c *Client) WaitForResearch(ctx context.Context, id string, opts *ResearchPollOptions) (*ResearchResponse, error) {
 	interval := 2 * time.Second
-	timeout := 600 * time.Second
 	if opts != nil {
 		if opts.Interval > 0 {
 			interval = opts.Interval
 		}
 		if opts.Timeout > 0 {
-			timeout = opts.Timeout
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+			defer cancel()
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
