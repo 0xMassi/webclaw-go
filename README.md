@@ -9,9 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://pkg.go.dev/github.com/0xMassi/webclaw-go"><img src="https://img.shields.io/badge/go-reference-212529?style=flat-square" alt="Go Reference" /></a>
-  <a href="https://github.com/0xMassi/webclaw-go/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-212529?style=flat-square" alt="License" /></a>
-  <a href="https://go.dev"><img src="https://img.shields.io/badge/go-%3E%3D1.21-212529?style=flat-square" alt="Go 1.21+" /></a>
+  <a href="https://pkg.go.dev/github.com/0xMassi/webclaw-go"><img src="https://shieldcn.dev/badge/Go-Reference.svg?variant=branded&logo=go" alt="Go Reference" /></a>
+  <a href="https://github.com/0xMassi/webclaw-go/stargazers"><img src="https://shieldcn.dev/github/stars/0xMassi/webclaw-go.svg?variant=branded&logo=github" alt="Stars" /></a>
+  <a href="https://github.com/0xMassi/webclaw-go/blob/main/LICENSE"><img src="https://shieldcn.dev/github/license/0xMassi/webclaw-go.svg?variant=branded" alt="License" /></a>
+  <a href="https://go.dev"><img src="https://shieldcn.dev/badge/Go-1.21+.svg?variant=branded&logo=go" alt="Go 1.21+" /></a>
 </p>
 
 ---
