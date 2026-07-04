@@ -423,6 +423,148 @@ if err != nil {
 }
 ```
 
+### X (Twitter) monitors
+
+Monitor X (Twitter) profiles, searches, lists, or replies and fire a webhook when new matching tweets appear — the X analog of `Watch`. **Paid-only:** these methods return a 403 (`IsForbidden`) for free or lapsed accounts. Each check (automated or manual) is billed at your plan rate (Starter 5, Growth 3, Pro 2, Scale 1 credits), and a user may hold at most 50 monitors.
+
+**Create a monitor**
+
+```go
+active := true
+monitor, err := client.CreateXMonitor(ctx, &webclaw.XMonitorCreateRequest{
+    Kind:            webclaw.XMonitorProfile, // profile | search | list | replies
+    Target:          "@nasa",                 // leading @ is stripped
+    Name:            "NASA posts",
+    IntervalMinutes: 15,                       // default 15, clamped 2..10080
+    WebhookURL:      "https://hooks.example.com/x", // Discord/Slack/generic
+    IncludeRetweets: &active,                  // *bool: nil = server default (true)
+    MinFaves:        100,                      // only match tweets with ≥100 likes
+    Keyword:         "launch",                 // only match tweets containing this
+})
+if err != nil {
+    if webclaw.IsForbidden(err) {
+        log.Fatal("X monitors are a paid feature — upgrade your account")
+    }
+    log.Fatal(err)
+}
+fmt.Printf("Monitor created: %s (checks every %d min)\n", monitor.ID, monitor.IntervalMinutes)
+```
+
+`Target` is interpreted per `Kind`: a handle (`profile`), a search query (`search`), a list id (`list`), or a tweet id (`replies`). The `IncludeRetweets`/`IncludeReplies`/`IncludeQuotes` fields are `*bool` so you can send an explicit `false`; leave them `nil` to accept the server default of `true`.
+
+**List monitors**
+
+```go
+list, err := client.ListXMonitors(ctx, 20, 0) // limit=20, offset=0
+if err != nil {
+    log.Fatal(err)
+}
+for _, m := range list.Monitors {
+    fmt.Printf("%s — %s:%s (active: %v)\n", m.ID, m.Kind, m.Target, m.Active)
+}
+```
+
+**Get a monitor**
+
+```go
+monitor, err := client.GetXMonitor(ctx, "monitor_id_here")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("%s — last checked %s, last matched %s\n",
+    monitor.Target, monitor.LastCheckedAt, monitor.LastMatchedAt)
+```
+
+**Update a monitor** (all fields optional — pause, rename, re-target the webhook, or change the interval)
+
+```go
+paused := false
+newName := "NASA (paused)"
+resp, err := client.UpdateXMonitor(ctx, "monitor_id_here", &webclaw.XMonitorUpdateRequest{
+    Name:   &newName,
+    Active: &paused,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.Success)
+```
+
+**Trigger a manual check** (runs in the background; billed at your plan rate)
+
+```go
+resp, err := client.CheckXMonitor(ctx, "monitor_id_here")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.Status) // "checking"
+```
+
+**Delete a monitor**
+
+```go
+resp, err := client.DeleteXMonitor(ctx, "monitor_id_here")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(resp.Success)
+```
+
+When a monitor matches new tweets, webclaw POSTs your `WebhookURL`. Discord and Slack URLs receive native embed/text formatting; any other URL receives a generic JSON payload:
+
+```json
+{
+  "event": "x.monitor.matched",
+  "monitor_id": "...",
+  "kind": "profile",
+  "target": "nasa",
+  "new_count": 2,
+  "tweets": [
+    {
+      "id": "...", "screen_name": "NASA", "text": "...", "url": "...",
+      "created_at": "...", "favorite_count": 1200, "retweet_count": 340,
+      "reply_count": 55, "lang": "en",
+      "is_retweet": false, "is_reply": false, "is_quote": false
+    }
+  ],
+  "checked_at": "..."
+}
+```
+
+### X (Twitter) audience export
+
+Export the followers or following of an X account, cursor-paginated and metered. **Paid-only** (`IsForbidden` on free/lapsed accounts); each page fetched is billed at your plan rate (Starter 5, Growth 3, Pro 2, Scale 1 credits).
+
+Provide either `Handle` (resolved once, unbilled) or a pre-resolved `UserID`. To walk a full audience, call repeatedly, passing back the returned `UserID` and `NextCursor`, until `NextCursor` is `nil`:
+
+```go
+req := &webclaw.XAudienceRequest{
+    Handle:    "@jack",
+    Direction: webclaw.XAudienceFollowers, // followers (default) | following
+    MaxPages:  2,                          // default 2, clamped 1..10
+}
+for {
+    page, err := client.ExportXAudience(ctx, req)
+    if err != nil {
+        if webclaw.IsForbidden(err) {
+            log.Fatal("audience export is a paid feature")
+        }
+        log.Fatal(err)
+    }
+    for _, u := range page.Users {
+        fmt.Printf("@%s (%d followers) — %s\n", u.ScreenName, u.Followers, u.Name)
+    }
+    fmt.Printf("page: %d users, %d pages fetched, %d credits\n",
+        page.Count, page.PagesFetched, page.CreditsCharged)
+
+    if page.NextCursor == nil {
+        break // audience fully walked
+    }
+    req.UserID = page.UserID    // skip re-resolving the handle on later pages
+    req.Cursor = *page.NextCursor
+}
+```
+
 ## Error Handling
 
 All API errors are returned as `*webclaw.APIError` with the HTTP status code and message. Use the helper functions to check for common error types.
@@ -476,6 +618,13 @@ if err != nil {
 | `WatchGet` | `(ctx, id) (*WatchDetail, error)` | Get watch with snapshots |
 | `WatchDelete` | `(ctx, id) error` | Delete watch |
 | `WatchCheck` | `(ctx, id) (*WatchCheckResponse, error)` | Trigger manual check |
+| `CreateXMonitor` | `(ctx, *XMonitorCreateRequest) (*XMonitor, error)` | Create X (Twitter) monitor |
+| `ListXMonitors` | `(ctx, limit, offset) (*XMonitorListResponse, error)` | List X monitors |
+| `GetXMonitor` | `(ctx, id) (*XMonitor, error)` | Get one X monitor |
+| `UpdateXMonitor` | `(ctx, id, *XMonitorUpdateRequest) (*XMonitorMutationResponse, error)` | Update an X monitor |
+| `DeleteXMonitor` | `(ctx, id) (*XMonitorMutationResponse, error)` | Delete an X monitor |
+| `CheckXMonitor` | `(ctx, id) (*XMonitorCheckResponse, error)` | Trigger an immediate X monitor check |
+| `ExportXAudience` | `(ctx, *XAudienceRequest) (*XAudienceResponse, error)` | Export X followers/following (metered) |
 
 ## License
 
