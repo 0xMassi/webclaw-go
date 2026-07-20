@@ -8,7 +8,8 @@ import (
 
 // ResearchRequest configures an async research job.
 type ResearchRequest struct {
-	Query         string `json:"query"`
+	Query string `json:"query"`
+	// Deprecated: research always runs in deep mode; this flag is ignored by the API.
 	Deep          bool   `json:"deep,omitempty"`
 	MaxSources    int    `json:"max_sources,omitempty"`
 	MaxIterations int    `json:"max_iterations,omitempty"`
@@ -47,7 +48,8 @@ type ResearchResponse struct {
 	FindingsCount int               `json:"findings_count,omitempty"`
 	Iterations    int               `json:"iterations,omitempty"`
 	ElapsedMs     int64             `json:"elapsed_ms,omitempty"`
-	Deep          bool              `json:"deep,omitempty"`
+	// Deprecated: research always runs in deep mode; this flag is ignored by the API.
+	Deep bool `json:"deep,omitempty"`
 }
 
 // Research starts an async research job and returns the job ID.

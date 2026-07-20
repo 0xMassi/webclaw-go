@@ -328,21 +328,21 @@ fmt.Println(result.Changes)
 
 ### Research
 
-Start an async deep research job and poll for results. Research can take several minutes depending on the query and configuration.
+Start an async research job and poll for results. Every research job runs in deep mode; jobs can take several minutes depending on the query and configuration.
 
 ```go
 // Start the job
 job, err := client.Research(ctx, &webclaw.ResearchRequest{
     Query:      "How do modern web crawlers handle JavaScript rendering?",
     MaxSources: 15,
-    Deep:       true,
 })
 if err != nil {
     log.Fatal(err)
 }
 fmt.Printf("Research job started: %s\n", job.ID)
 
-// Poll until complete (default: 2s interval, 10min timeout)
+// Poll until complete (default: 2s interval, no timeout beyond ctx —
+// bound the wait with a context deadline or opts.Timeout)
 result, err := client.WaitForResearch(ctx, job.ID, nil)
 if err != nil {
     log.Fatal(err)
