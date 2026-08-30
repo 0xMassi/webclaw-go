@@ -966,6 +966,12 @@ func TestReadBodyWithLimit(t *testing.T) {
 	}
 }
 
+func TestRetryDelayClampsBeforeDurationConversion(t *testing.T) {
+	if got := retryDelay(0, "10000000000"); got != 5*time.Second {
+		t.Fatalf("oversized Retry-After delay = %s, want 5s", got)
+	}
+}
+
 func TestGetRetriesTransientFailureAndEscapesID(t *testing.T) {
 	var calls atomic.Int32
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {

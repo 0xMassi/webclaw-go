@@ -141,12 +141,14 @@ func (c *Client) do(ctx context.Context, method, path string, body any, dst any)
 }
 
 func retryDelay(attempt int, retryAfter string) time.Duration {
-	if seconds, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && seconds >= 0 {
-		delay := time.Duration(seconds) * time.Second
-		if delay > 5*time.Second {
+	if seconds, err := strconv.ParseUint(strings.TrimSpace(retryAfter), 10, 64); err == nil {
+		// Clamp the untrusted header before converting it to time.Duration.
+		// Converting a very large second count first can overflow to a negative
+		// duration and accidentally turn a requested delay into an immediate retry.
+		if seconds > 5 {
 			return 5 * time.Second
 		}
-		return delay
+		return time.Duration(seconds) * time.Second
 	}
 	return time.Duration(1<<attempt) * 100 * time.Millisecond
 }
