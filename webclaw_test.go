@@ -931,18 +931,57 @@ func TestAPIError_RawBodyTruncated(t *testing.T) {
 
 // --- Context cancellation ---
 
-func TestScrape_ContextCancelled(t *testing.T) {
-	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(5 * time.Second)
-		json.NewEncoder(w).Encode(ScrapeResponse{})
-	})
+func TestScrape_ContextErrorDuringActiveRequest(t *testing.T) {
+	tests := []struct {
+		name       string
+		newContext func() (context.Context, context.CancelFunc)
+		cancelNow  bool
+		want       error
+	}{
+		{
+			name: "cancelled",
+			newContext: func() (context.Context, context.CancelFunc) {
+				return context.WithCancel(context.Background())
+			},
+			cancelNow: true,
+			want:      context.Canceled,
+		},
+		{
+			name: "deadline exceeded",
+			newContext: func() (context.Context, context.CancelFunc) {
+				return context.WithTimeout(context.Background(), 100*time.Millisecond)
+			},
+			want: context.DeadlineExceeded,
+		},
+	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			started := make(chan struct{})
+			release := make(chan struct{})
+			_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				close(started)
+				<-release
+			})
 
-	_, err := client.Scrape(ctx, &ScrapeRequest{URL: "https://example.com"})
-	if err == nil {
-		t.Fatal("expected error from cancelled context")
+			ctx, cancel := tt.newContext()
+			defer cancel()
+			errCh := make(chan error, 1)
+			go func() {
+				_, err := client.Scrape(ctx, &ScrapeRequest{URL: "https://example.com"})
+				errCh <- err
+			}()
+
+			<-started
+			if tt.cancelNow {
+				cancel()
+			}
+			err := <-errCh
+			close(release)
+			if err != tt.want {
+				t.Fatalf("err = %v, want exact %v", err, tt.want)
+			}
+		})
 	}
 }
 
