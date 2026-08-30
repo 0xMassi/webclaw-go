@@ -143,7 +143,7 @@ func (c *Client) ListXMonitors(ctx context.Context, limit, offset int) (*XMonito
 // and last-checked / last-matched timestamps.
 func (c *Client) GetXMonitor(ctx context.Context, id string) (*XMonitor, error) {
 	var resp XMonitor
-	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/x/monitors/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/x/monitors/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -153,7 +153,7 @@ func (c *Client) GetXMonitor(ctx context.Context, id string) (*XMonitor, error) 
 // state. Only the non-nil fields of req are sent.
 func (c *Client) UpdateXMonitor(ctx context.Context, id string, req *XMonitorUpdateRequest) (*XMonitorMutationResponse, error) {
 	var resp XMonitorMutationResponse
-	if err := c.do(ctx, "PATCH", fmt.Sprintf("/v1/x/monitors/%s", id), req, &resp); err != nil {
+	if err := c.do(ctx, "PATCH", fmt.Sprintf("/v1/x/monitors/%s", pathSegment(id)), req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -162,7 +162,7 @@ func (c *Client) UpdateXMonitor(ctx context.Context, id string, req *XMonitorUpd
 // DeleteXMonitor removes an X monitor.
 func (c *Client) DeleteXMonitor(ctx context.Context, id string) (*XMonitorMutationResponse, error) {
 	var resp XMonitorMutationResponse
-	if err := c.do(ctx, "DELETE", fmt.Sprintf("/v1/x/monitors/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "DELETE", fmt.Sprintf("/v1/x/monitors/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -172,7 +172,7 @@ func (c *Client) DeleteXMonitor(ctx context.Context, id string) (*XMonitorMutati
 // the background and costs one credit; the returned Status is "checking".
 func (c *Client) CheckXMonitor(ctx context.Context, id string) (*XMonitorCheckResponse, error) {
 	var resp XMonitorCheckResponse
-	if err := c.do(ctx, "POST", fmt.Sprintf("/v1/x/monitors/%s/check", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "POST", fmt.Sprintf("/v1/x/monitors/%s/check", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

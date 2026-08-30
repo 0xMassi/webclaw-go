@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,8 +19,13 @@ const (
 
 	// maxErrBodyLen caps how many bytes of a raw, unparseable upstream
 	// response body are copied into an APIError message.
-	maxErrBodyLen = 512
+	maxErrBodyLen           = 512
+	maxResponseBodyLen      = 64 << 20
+	maxErrorResponseBodyLen = 64 << 10
+	maxGETRetries           = 2
 )
+
+func pathSegment(value string) string { return url.PathEscape(value) }
 
 // truncate returns s shortened to at most max bytes, appending an ellipsis
 // marker when content was dropped.
@@ -85,33 +92,98 @@ func NewClient(apiKey string, opts ...Option) *Client {
 // do executes an HTTP request, decoding the JSON response into dst.
 // It handles auth headers and API error responses.
 func (c *Client) do(ctx context.Context, method, path string, body any, dst any) error {
-	var reqBody io.Reader
+	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("webclaw: marshal request: %w", err)
 		}
-		reqBody = bytes.NewReader(b)
+		bodyBytes = b
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	for attempt := 0; ; attempt++ {
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+		if err != nil {
+			return fmt.Errorf("webclaw: build request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		resp, err := c.http.Do(req)
+		if err != nil {
+			if method == http.MethodGet && attempt < maxGETRetries && ctx.Err() == nil {
+				if err := waitForRetry(ctx, retryDelay(attempt, "")); err != nil {
+					return err
+				}
+				continue
+			}
+			return fmt.Errorf("webclaw: request failed: %w", err)
+		}
+
+		if method == http.MethodGet && attempt < maxGETRetries &&
+			(resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) {
+			io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			resp.Body.Close()
+			if err := waitForRetry(ctx, retryDelay(attempt, resp.Header.Get("Retry-After"))); err != nil {
+				return err
+			}
+			continue
+		}
+
+		return decodeResponse(resp, dst)
+	}
+}
+
+func retryDelay(attempt int, retryAfter string) time.Duration {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(retryAfter)); err == nil && seconds >= 0 {
+		delay := time.Duration(seconds) * time.Second
+		if delay > 5*time.Second {
+			return 5 * time.Second
+		}
+		return delay
+	}
+	return time.Duration(1<<attempt) * 100 * time.Millisecond
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func readBodyWithLimit(reader io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
-		return fmt.Errorf("webclaw: build request: %w", err)
+		return nil, err
 	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("response body exceeds %d bytes", limit)
+	}
+	return body, nil
+}
 
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("webclaw: request failed: %w", err)
-	}
+func decodeResponse(resp *http.Response, dst any) error {
 	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
+	limit := int64(maxResponseBodyLen)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		limit = maxErrorResponseBodyLen
+	}
+	respBody, err := readBodyWithLimit(resp.Body, limit)
 	if err != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return &APIError{StatusCode: resp.StatusCode, Message: err.Error()}
+		}
 		return fmt.Errorf("webclaw: read response: %w", err)
 	}
 

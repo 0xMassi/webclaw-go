@@ -24,7 +24,7 @@ func (c *Client) Crawl(ctx context.Context, req *CrawlRequest) (*CrawlStartRespo
 // GetCrawl polls the status of a crawl job by ID.
 func (c *Client) GetCrawl(ctx context.Context, id string) (*CrawlStatusResponse, error) {
 	var resp CrawlStatusResponse
-	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/crawl/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/crawl/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

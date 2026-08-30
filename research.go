@@ -64,7 +64,7 @@ func (c *Client) Research(ctx context.Context, req *ResearchRequest) (*ResearchS
 // GetResearchStatus retrieves the status and results of a research job.
 func (c *Client) GetResearchStatus(ctx context.Context, id string) (*ResearchResponse, error) {
 	var resp ResearchResponse
-	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/research/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/research/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
