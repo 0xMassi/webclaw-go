@@ -84,7 +84,7 @@ func (c *Client) WatchList(ctx context.Context, limit, offset int) (*WatchListRe
 // WatchGet retrieves a single watch by ID, including recent snapshots.
 func (c *Client) WatchGet(ctx context.Context, id string) (*WatchDetail, error) {
 	var resp WatchDetail
-	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/watch/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/watch/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -92,13 +92,13 @@ func (c *Client) WatchGet(ctx context.Context, id string) (*WatchDetail, error) 
 
 // WatchDelete removes a watch and all its snapshots.
 func (c *Client) WatchDelete(ctx context.Context, id string) error {
-	return c.do(ctx, "DELETE", fmt.Sprintf("/v1/watch/%s", id), nil, nil)
+	return c.do(ctx, "DELETE", fmt.Sprintf("/v1/watch/%s", pathSegment(id)), nil, nil)
 }
 
 // WatchCheck triggers an immediate check of a watched URL.
 func (c *Client) WatchCheck(ctx context.Context, id string) (*WatchCheckResponse, error) {
 	var resp WatchCheckResponse
-	if err := c.do(ctx, "POST", fmt.Sprintf("/v1/watch/%s/check", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "POST", fmt.Sprintf("/v1/watch/%s/check", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

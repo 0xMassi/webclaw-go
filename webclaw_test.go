@@ -956,6 +956,47 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
+func TestReadBodyWithLimit(t *testing.T) {
+	body, err := readBodyWithLimit(strings.NewReader("1234"), 4)
+	if err != nil || string(body) != "1234" {
+		t.Fatalf("bounded read = %q, %v", body, err)
+	}
+	if _, err := readBodyWithLimit(strings.NewReader("12345"), 4); err == nil {
+		t.Fatal("expected oversized response body to fail")
+	}
+}
+
+func TestRetryDelayClampsBeforeDurationConversion(t *testing.T) {
+	if got := retryDelay(0, "10000000000"); got != 5*time.Second {
+		t.Fatalf("oversized Retry-After delay = %s, want 5s", got)
+	}
+}
+
+func TestGetRetriesTransientFailureAndEscapesID(t *testing.T) {
+	var calls atomic.Int32
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/v1/crawl/job%2Fwith%20space" {
+			t.Errorf("escaped path = %q", got)
+		}
+		if calls.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		json.NewEncoder(w).Encode(CrawlStatusResponse{
+			ID: "job/with space", Status: CrawlStatusCompleted,
+		})
+	})
+
+	resp, err := client.GetCrawl(context.Background(), "job/with space")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != CrawlStatusCompleted || calls.Load() != 2 {
+		t.Fatalf("response = %#v, calls = %d", resp, calls.Load())
+	}
+}
+
 // --- BrandResponse.Decode edge case ---
 
 func TestBrandResponse_Decode_NilData(t *testing.T) {

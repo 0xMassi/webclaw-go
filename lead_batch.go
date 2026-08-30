@@ -72,7 +72,7 @@ func (c *Client) LeadBatch(ctx context.Context, req *LeadBatchRequest) (*LeadBat
 // GetLeadBatch polls the status and results of a lead batch job by ID.
 func (c *Client) GetLeadBatch(ctx context.Context, id string) (*LeadBatchResponse, error) {
 	var resp LeadBatchResponse
-	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/lead/batch/%s", id), nil, &resp); err != nil {
+	if err := c.do(ctx, "GET", fmt.Sprintf("/v1/lead/batch/%s", pathSegment(id)), nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
