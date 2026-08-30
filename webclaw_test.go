@@ -803,6 +803,119 @@ func TestBrand_Success(t *testing.T) {
 	}
 }
 
+// --- Search ---
+
+func TestSearch_WithFilters(t *testing.T) {
+	scrape := false
+	autocorrect := false
+
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/search" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+
+		var req SearchRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.Query != "reddit pain points" || req.NumResults != 10 {
+			t.Errorf("query/count = %q/%d", req.Query, req.NumResults)
+		}
+		if req.Scrape == nil || *req.Scrape {
+			t.Errorf("Scrape = %v, want explicit false", req.Scrape)
+		}
+		if req.Autocorrect == nil || *req.Autocorrect {
+			t.Errorf("Autocorrect = %v, want explicit false", req.Autocorrect)
+		}
+		if len(req.IncludeDomains) != 1 || req.IncludeDomains[0] != "reddit.com" {
+			t.Errorf("IncludeDomains = %v", req.IncludeDomains)
+		}
+		if len(req.ExcludeDomains) != 1 || req.ExcludeDomains[0] != "example.com" {
+			t.Errorf("ExcludeDomains = %v", req.ExcludeDomains)
+		}
+		if len(req.IncludeURLPrefixes) != 1 || req.IncludeURLPrefixes[0] != "https://www.reddit.com/r/golang/comments/" {
+			t.Errorf("IncludeURLPrefixes = %v", req.IncludeURLPrefixes)
+		}
+		if req.Freshness != SearchFreshnessMonth || req.Page != 2 {
+			t.Errorf("Freshness/Page = %q/%d", req.Freshness, req.Page)
+		}
+		if req.Location != "Austin, Texas, United States" || !req.NoCache || req.MaxCacheAge != 300 {
+			t.Errorf("location/cache fields = %q/%t/%d", req.Location, req.NoCache, req.MaxCacheAge)
+		}
+
+		json.NewEncoder(w).Encode(SearchResponse{
+			Query: "reddit pain points",
+			Results: []SearchResult{{
+				Title: "Post", URL: "https://www.reddit.com/r/golang/comments/abc/post/", Position: 1,
+			}},
+			Scrape: false,
+			AppliedFilters: &SearchAppliedFilters{
+				IncludeDomains:     []string{"reddit.com"},
+				ExcludeDomains:     []string{"example.com"},
+				IncludeURLPrefixes: []string{"https://www.reddit.com/r/golang/comments/"},
+				Freshness:          SearchFreshnessMonth,
+				Location:           "Austin, Texas, United States",
+				Autocorrect:        &autocorrect,
+			},
+			FilteredOutCount: 4,
+			Page:             2,
+		})
+	})
+
+	resp, err := client.Search(context.Background(), &SearchRequest{
+		Query:              "reddit pain points",
+		NumResults:         10,
+		Scrape:             &scrape,
+		Formats:            []Format{FormatMarkdown},
+		Country:            "us",
+		Lang:               "en",
+		IncludeDomains:     []string{"reddit.com"},
+		ExcludeDomains:     []string{"example.com"},
+		IncludeURLPrefixes: []string{"https://www.reddit.com/r/golang/comments/"},
+		Freshness:          SearchFreshnessMonth,
+		Page:               2,
+		Location:           "Austin, Texas, United States",
+		Autocorrect:        &autocorrect,
+		NoCache:            true,
+		MaxCacheAge:        300,
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Position != 1 {
+		t.Fatalf("Results = %+v", resp.Results)
+	}
+	if resp.AppliedFilters == nil || resp.AppliedFilters.Freshness != SearchFreshnessMonth {
+		t.Fatalf("AppliedFilters = %+v", resp.AppliedFilters)
+	}
+	if resp.FilteredOutCount != 4 || resp.Page != 2 {
+		t.Errorf("filtered/page = %d/%d", resp.FilteredOutCount, resp.Page)
+	}
+}
+
+func TestSearch_PublishedBounds(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var req SearchRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.PublishedAfter != "2026-07-01" || req.PublishedBefore != "2026-07-31" {
+			t.Errorf("publication bounds = %q/%q", req.PublishedAfter, req.PublishedBefore)
+		}
+		json.NewEncoder(w).Encode(SearchResponse{Query: req.Query, Results: []SearchResult{}})
+	})
+
+	_, err := client.Search(context.Background(), &SearchRequest{
+		Query:           "q",
+		PublishedAfter:  "2026-07-01",
+		PublishedBefore: "2026-07-31",
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+}
+
 // --- Error handling ---
 
 func TestAPIError_401(t *testing.T) {

@@ -127,13 +127,25 @@ The `Data` field is `map[string]any`; consult `ListExtractors` for the fields ea
 
 ### Search
 
-Web search with optional scraping of results.
+Web search with strict source filters, provider freshness/date/locale hints,
+pagination, and optional scraping of results.
 
 ```go
+scrape := false
+autocorrect := false
 resp, err := client.Search(ctx, &webclaw.SearchRequest{
-    Query:      "web scraping tools 2026",
-    NumResults: 10,
-    Country:    "us",
+    Query:              "website pain points",
+    NumResults:         10,
+    IncludeDomains:     []string{"reddit.com"},
+    IncludeURLPrefixes: []string{"https://www.reddit.com/r/webdesign/comments/"},
+    Freshness:          webclaw.SearchFreshnessMonth,
+    Page:               1,
+    Location:           "Austin, Texas, United States",
+    Autocorrect:        &autocorrect,
+    Scrape:             &scrape,
+    Country:            "us",
+    Lang:               "en",
+    NoCache:            true,
 })
 if err != nil {
     log.Fatal(err)
@@ -141,7 +153,13 @@ if err != nil {
 for _, r := range resp.Results {
     fmt.Printf("%d. %s — %s\n", r.Position, r.Title, r.URL)
 }
+fmt.Println("Filtered:", resp.FilteredOutCount)
 ```
+
+Use `PublishedAfter` / `PublishedBefore` (`YYYY-MM-DD`) instead of `Freshness`
+when you need explicit provider discovery hints; `PublishedBefore` is
+exclusive. These hints do not verify a result's actual publication date, so
+inspect the source timestamp when correctness matters.
 
 ### Map
 
