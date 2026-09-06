@@ -81,13 +81,15 @@ type YouTubeData struct {
 
 // ScrapeResponse contains the extracted content from a scrape.
 type ScrapeResponse struct {
-	URL      string          `json:"url"`
-	Metadata json.RawMessage `json:"metadata,omitempty"`
-	Markdown string          `json:"markdown,omitempty"`
-	Text     string          `json:"text,omitempty"`
-	LLM      string          `json:"llm,omitempty"`
-	Cache    CacheInfo       `json:"cache"`
-	Warning  string          `json:"warning,omitempty"`
+	// Extraction contains the full result requested by FormatJSON.
+	Extraction json.RawMessage `json:"extraction,omitempty"`
+	URL        string          `json:"url"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+	Markdown   string          `json:"markdown,omitempty"`
+	Text       string          `json:"text,omitempty"`
+	LLM        string          `json:"llm,omitempty"`
+	Cache      CacheInfo       `json:"cache"`
+	Warning    string          `json:"warning,omitempty"`
 	// YouTube is set when the URL is youtube.com/watch, /shorts, or
 	// youtu.be. Carries channel, duration, view count, tags, etc.
 	YouTube *YouTubeData `json:"youtube,omitempty"`
@@ -155,10 +157,13 @@ type BatchRequest struct {
 
 // BatchResult holds the extracted content for one URL in a batch.
 type BatchResult struct {
-	URL      string          `json:"url"`
-	Markdown string          `json:"markdown,omitempty"`
-	Metadata json.RawMessage `json:"metadata,omitempty"`
-	Error    string          `json:"error,omitempty"`
+	Extraction json.RawMessage `json:"extraction,omitempty"`
+	Text       string          `json:"text,omitempty"`
+	LLM        string          `json:"llm,omitempty"`
+	URL        string          `json:"url"`
+	Markdown   string          `json:"markdown,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+	Error      string          `json:"error,omitempty"`
 }
 
 // BatchResponse contains the results of a batch scrape.

@@ -1069,3 +1069,21 @@ func ExampleClient_Search() {
 		fmt.Printf("%d. %s - %s\n", r.Position, r.Title, r.URL)
 	}
 }
+
+func TestScrapeJSONExtraction(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"url":"https://example.com","metadata":{},"extraction":{"content":{"markdown":"# Example"}},"cache":{"status":"bypass"}}`))
+	})
+	result, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://example.com", Formats: []Format{FormatJSON}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var extraction map[string]any
+	if err := json.Unmarshal(result.Extraction, &extraction); err != nil {
+		t.Fatal(err)
+	}
+	if extraction["content"].(map[string]any)["markdown"] != "# Example" {
+		t.Fatalf("missing extraction: %s", result.Extraction)
+	}
+}
