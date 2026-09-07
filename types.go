@@ -44,13 +44,19 @@ const (
 // --- Scrape ---
 
 // ScrapeRequest configures a single URL scrape.
+type ExtractOptions struct {
+	Schema map[string]any `json:"schema,omitempty"`
+	Prompt string         `json:"prompt,omitempty"`
+}
+
 type ScrapeRequest struct {
-	URL              string   `json:"url"`
-	Formats          []Format `json:"formats,omitempty"`
-	IncludeSelectors []string `json:"include_selectors,omitempty"`
-	ExcludeSelectors []string `json:"exclude_selectors,omitempty"`
-	OnlyMainContent  bool     `json:"only_main_content,omitempty"`
-	NoCache          bool     `json:"no_cache,omitempty"`
+	Extract          *ExtractOptions `json:"extract,omitempty"`
+	URL              string          `json:"url"`
+	Formats          []Format        `json:"formats,omitempty"`
+	IncludeSelectors []string        `json:"include_selectors,omitempty"`
+	ExcludeSelectors []string        `json:"exclude_selectors,omitempty"`
+	OnlyMainContent  bool            `json:"only_main_content,omitempty"`
+	NoCache          bool            `json:"no_cache,omitempty"`
 }
 
 // CacheInfo describes the cache status of a scrape response.
@@ -81,6 +87,7 @@ type YouTubeData struct {
 
 // ScrapeResponse contains the extracted content from a scrape.
 type ScrapeResponse struct {
+	Extract any `json:"extract,omitempty"`
 	// Extraction contains the full result requested by FormatJSON.
 	Extraction json.RawMessage `json:"extraction,omitempty"`
 	URL        string          `json:"url"`
