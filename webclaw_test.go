@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -65,23 +66,20 @@ func TestScrape_Success(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 
-		var req ScrapeRequest
+		var req map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			return
 		}
-		if req.URL != "https://example.com" {
-			t.Errorf("req.URL = %q", req.URL)
+		want := map[string]any{
+			"url":     "https://example.com",
+			"formats": []any{"markdown", "text"},
 		}
-		if len(req.Formats) != 2 {
-			t.Errorf("req.Formats = %v", req.Formats)
+		if !reflect.DeepEqual(req, want) {
+			t.Errorf("request body = %#v, want %#v", req, want)
 		}
 
-		json.NewEncoder(w).Encode(ScrapeResponse{
-			URL:      "https://example.com",
-			Markdown: "# Hello",
-			Text:     "Hello",
-			Cache:    CacheInfo{Status: CacheMiss},
-		})
+		fmt.Fprint(w, `{"url":"https://example.com","markdown":"# Hello","text":"Hello","cache":{"status":"miss"}}`)
 	})
 
 	resp, err := client.Scrape(context.Background(), &ScrapeRequest{
@@ -102,23 +100,26 @@ func TestScrape_Success(t *testing.T) {
 func TestScrape_WithSelectors(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assertAuth(t, r)
-		var req ScrapeRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		if r.URL.Path != "/v1/scrape" || r.Method != "POST" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		want := map[string]any{
+			"url":               "https://example.com",
+			"include_selectors": []any{"main"},
+			"exclude_selectors": []any{"nav"},
+			"only_main_content": true,
+			"no_cache":          true,
+		}
+		if !reflect.DeepEqual(req, want) {
+			t.Errorf("request body = %#v, want %#v", req, want)
+		}
 
-		if len(req.IncludeSelectors) != 1 || req.IncludeSelectors[0] != "main" {
-			t.Errorf("IncludeSelectors = %v", req.IncludeSelectors)
-		}
-		if len(req.ExcludeSelectors) != 1 || req.ExcludeSelectors[0] != "nav" {
-			t.Errorf("ExcludeSelectors = %v", req.ExcludeSelectors)
-		}
-		if !req.OnlyMainContent {
-			t.Error("OnlyMainContent should be true")
-		}
-		if !req.NoCache {
-			t.Error("NoCache should be true")
-		}
-
-		json.NewEncoder(w).Encode(ScrapeResponse{URL: req.URL, Cache: CacheInfo{Status: CacheBypass}})
+		fmt.Fprint(w, `{"url":"https://example.com","cache":{"status":"bypass"}}`)
 	})
 
 	resp, err := client.Scrape(context.Background(), &ScrapeRequest{
@@ -1069,6 +1070,47 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 }
 
+func TestReadBodyWithLimit(t *testing.T) {
+	body, err := readBodyWithLimit(strings.NewReader("1234"), 4)
+	if err != nil || string(body) != "1234" {
+		t.Fatalf("bounded read = %q, %v", body, err)
+	}
+	if _, err := readBodyWithLimit(strings.NewReader("12345"), 4); err == nil {
+		t.Fatal("expected oversized response body to fail")
+	}
+}
+
+func TestRetryDelayClampsBeforeDurationConversion(t *testing.T) {
+	if got := retryDelay(0, "10000000000"); got != 5*time.Second {
+		t.Fatalf("oversized Retry-After delay = %s, want 5s", got)
+	}
+}
+
+func TestGetRetriesTransientFailureAndEscapesID(t *testing.T) {
+	var calls atomic.Int32
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.EscapedPath(); got != "/v1/crawl/job%2Fwith%20space" {
+			t.Errorf("escaped path = %q", got)
+		}
+		if calls.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		json.NewEncoder(w).Encode(CrawlStatusResponse{
+			ID: "job/with space", Status: CrawlStatusCompleted,
+		})
+	})
+
+	resp, err := client.GetCrawl(context.Background(), "job/with space")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != CrawlStatusCompleted || calls.Load() != 2 {
+		t.Fatalf("response = %#v, calls = %d", resp, calls.Load())
+	}
+}
+
 // --- BrandResponse.Decode edge case ---
 
 func TestBrandResponse_Decode_NilData(t *testing.T) {
@@ -1139,5 +1181,43 @@ func ExampleClient_Search() {
 	}
 	for _, r := range resp.Results {
 		fmt.Printf("%d. %s - %s\n", r.Position, r.Title, r.URL)
+	}
+}
+
+func TestScrapeJSONExtraction(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"url":"https://example.com","metadata":{},"extraction":{"content":{"markdown":"# Example"}},"cache":{"status":"bypass"}}`))
+	})
+	result, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://example.com", Formats: []Format{FormatJSON}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var extraction map[string]any
+	if err := json.Unmarshal(result.Extraction, &extraction); err != nil {
+		t.Fatal(err)
+	}
+	if extraction["content"].(map[string]any)["markdown"] != "# Example" {
+		t.Fatalf("missing extraction: %s", result.Extraction)
+	}
+}
+
+func TestScrape_MixedExtraction(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req["extract"].(map[string]any)["prompt"] != "Use the page heading" {
+			t.Error("missing extract options")
+		}
+		fmt.Fprint(w, `{"url":"https://example.com","markdown":"# Example","extract":{"title":"Example"}}`)
+	})
+	resp, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://example.com", Formats: []Format{FormatMarkdown, Format("extract")}, Extract: &ExtractOptions{Prompt: "Use the page heading"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Markdown != "# Example" || resp.Extract.(map[string]any)["title"] != "Example" {
+		t.Errorf("mixed output lost: %#v", resp)
 	}
 }
