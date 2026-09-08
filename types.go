@@ -14,7 +14,12 @@ const (
 	// FormatLLM requests LLM-optimized output (compressed markdown).
 	FormatLLM Format = "llm"
 	// FormatJSON requests structured JSON output.
-	FormatJSON Format = "json"
+	FormatJSON       Format = "json"
+	FormatExtract    Format = "extract"
+	FormatLinks      Format = "links"
+	FormatRawHTML    Format = "rawHtml"
+	FormatAttributes Format = "attributes"
+	FormatQuery      Format = "query"
 )
 
 // CrawlStatus represents the state of an async crawl job.
@@ -22,7 +27,9 @@ type CrawlStatus string
 
 const (
 	// CrawlStatusRunning indicates the crawl is still in progress.
-	CrawlStatusRunning CrawlStatus = "running"
+	CrawlStatusRunning     CrawlStatus = "running"
+	CrawlStatusPending     CrawlStatus = "pending"
+	CrawlStatusInterrupted CrawlStatus = "interrupted"
 	// CrawlStatusCompleted indicates the crawl finished successfully.
 	CrawlStatusCompleted CrawlStatus = "completed"
 	// CrawlStatusFailed indicates the crawl encountered an unrecoverable error.
@@ -39,6 +46,7 @@ const (
 	CacheMiss CacheStatus = "miss"
 	// CacheBypass means caching was explicitly skipped via NoCache.
 	CacheBypass CacheStatus = "bypass"
+	CacheSkip   CacheStatus = "skip"
 )
 
 // --- Scrape ---
@@ -50,24 +58,36 @@ type ExtractOptions struct {
 }
 
 type ScrapeRequest struct {
-	Extract          *ExtractOptions `json:"extract,omitempty"`
-	URL              string          `json:"url"`
-	Formats          []Format        `json:"formats,omitempty"`
-	IncludeSelectors []string        `json:"include_selectors,omitempty"`
-	ExcludeSelectors []string        `json:"exclude_selectors,omitempty"`
-	OnlyMainContent  bool            `json:"only_main_content,omitempty"`
-	NoCache          bool            `json:"no_cache,omitempty"`
+	Extract            *ExtractOptions     `json:"extract,omitempty"`
+	URL                string              `json:"url"`
+	Formats            []Format            `json:"formats,omitempty"`
+	IncludeSelectors   []string            `json:"include_selectors,omitempty"`
+	ExcludeSelectors   []string            `json:"exclude_selectors,omitempty"`
+	OnlyMainContent    bool                `json:"only_main_content,omitempty"`
+	NoCache            bool                `json:"no_cache,omitempty"`
+	MaxCacheAge        *uint64             `json:"max_cache_age,omitempty"`
+	Mobile             bool                `json:"mobile,omitempty"`
+	Screenshot         bool                `json:"screenshot,omitempty"`
+	Actions            []map[string]any    `json:"actions,omitempty"`
+	Query              string              `json:"query,omitempty"`
+	AttributeSelectors []AttributeSelector `json:"attribute_selectors,omitempty"`
+}
+
+type AttributeSelector struct {
+	Selector  string `json:"selector"`
+	Attribute string `json:"attribute"`
 }
 
 // CacheInfo describes the cache status of a scrape response.
 type CacheInfo struct {
-	Status CacheStatus `json:"status"`
+	Status     CacheStatus `json:"status"`
+	CachedAt   *string     `json:"cached_at,omitempty"`
+	AgeSeconds *uint64     `json:"age_seconds,omitempty"`
 }
 
 // YouTubeData holds structured metadata for a YouTube watch URL,
-// populated by /v1/scrape via the server's yt-dlp short-circuit
-// (preferred) or the standard pipeline's vertical YouTube extractor
-// (Transcript will be empty on the fallback path).
+// returned by /v1/scrape. Metadata may be available without captions;
+// inspect Warning and Transcript before treating a response as a transcript.
 type YouTubeData struct {
 	VideoID         string   `json:"video_id,omitempty"`
 	Title           string   `json:"title,omitempty"`
@@ -95,7 +115,7 @@ type ScrapeResponse struct {
 	Markdown   string          `json:"markdown,omitempty"`
 	Text       string          `json:"text,omitempty"`
 	LLM        string          `json:"llm,omitempty"`
-	Cache      CacheInfo       `json:"cache"`
+	Cache      *CacheInfo      `json:"cache"`
 	Warning    string          `json:"warning,omitempty"`
 	// YouTube is set when the URL is youtube.com/watch, /shorts, or
 	// youtu.be. Carries channel, duration, view count, tags, etc.
@@ -103,17 +123,31 @@ type ScrapeResponse struct {
 	// Transcript carries the auto-caption text (newline-joined). Only
 	// present when the yt-dlp short-circuit fired and the video has
 	// captions.
-	Transcript string `json:"transcript,omitempty"`
+	Transcript       string           `json:"transcript,omitempty"`
+	Links            []map[string]any `json:"links,omitempty"`
+	RawHTML          string           `json:"rawHtml,omitempty"`
+	Attributes       []map[string]any `json:"attributes,omitempty"`
+	QueryAnswer      *string          `json:"query_answer,omitempty"`
+	Screenshot       string           `json:"screenshot,omitempty"`
+	ActionsPerformed int              `json:"actions_performed,omitempty"`
+	Mobile           bool             `json:"mobile,omitempty"`
+	StructuredData   json.RawMessage  `json:"structured_data,omitempty"`
+	Engine           json.RawMessage  `json:"engine,omitempty"`
 }
 
 // --- Crawl ---
 
 // CrawlRequest configures an async crawl job.
 type CrawlRequest struct {
-	URL        string `json:"url"`
-	MaxDepth   int    `json:"max_depth,omitempty"`
-	MaxPages   int    `json:"max_pages,omitempty"`
-	UseSitemap bool   `json:"use_sitemap,omitempty"`
+	IncludePatterns    []string `json:"include_patterns,omitempty"`
+	ExcludePatterns    []string `json:"exclude_patterns,omitempty"`
+	WebhookURL         string   `json:"webhook_url,omitempty"`
+	AllowSubdomains    bool     `json:"allow_subdomains,omitempty"`
+	AllowExternalLinks bool     `json:"allow_external_links,omitempty"`
+	URL                string   `json:"url"`
+	MaxDepth           int      `json:"max_depth,omitempty"`
+	MaxPages           int      `json:"max_pages,omitempty"`
+	UseSitemap         bool     `json:"use_sitemap,omitempty"`
 }
 
 // CrawlStartResponse is returned when a crawl job is created.
@@ -144,13 +178,19 @@ type CrawlStatusResponse struct {
 
 // MapRequest configures a sitemap URL discovery request.
 type MapRequest struct {
-	URL string `json:"url"`
+	Search string `json:"search,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+	URL    string `json:"url"`
 }
 
 // MapResponse contains the discovered URLs from a sitemap.
 type MapResponse struct {
-	URLs  []string `json:"urls"`
-	Count int      `json:"count"`
+	NextCursor   *string  `json:"next_cursor,omitempty"`
+	TotalIndexed int      `json:"total_indexed,omitempty"`
+	Cached       bool     `json:"cached"`
+	URLs         []string `json:"urls"`
+	Count        int      `json:"count"`
 }
 
 // --- Batch ---

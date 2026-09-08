@@ -54,7 +54,7 @@ func (c *Client) WaitForCompletion(ctx context.Context, id string, opts *CrawlPo
 		if err != nil {
 			return nil, err
 		}
-		if resp.Status == CrawlStatusCompleted || resp.Status == CrawlStatusFailed {
+		if resp.Status == CrawlStatusCompleted || resp.Status == CrawlStatusFailed || resp.Status == CrawlStatusInterrupted {
 			return resp, nil
 		}
 

@@ -24,13 +24,28 @@ type ResearchStartResponse struct {
 
 // ResearchSource represents a source found during research.
 type ResearchSource struct {
-	URL     string `json:"url"`
-	Title   string `json:"title"`
-	Summary string `json:"summary"`
+	Words         int    `json:"words"`
+	Excerpt       string `json:"excerpt"`
+	RetrievedAt   string `json:"retrieved_at"`
+	Truncated     bool   `json:"truncated"`
+	ContentSHA256 string `json:"content_sha256"`
+	URL           string `json:"url"`
+	Title         string `json:"title"`
+	Summary       string `json:"summary"`
 }
 
 // ResearchFinding represents a finding from research.
+type ResearchEvidence struct {
+	SourceURL string `json:"source_url"`
+	Quote     string `json:"quote"`
+}
+
 type ResearchFinding struct {
+	Fact       string             `json:"fact"`
+	SourceURL  string             `json:"source_url"`
+	Confidence string             `json:"confidence"`
+	Evidence   []ResearchEvidence `json:"evidence,omitempty"`
+	// Deprecated: older servers only; use Fact, SourceURL, Confidence and Evidence.
 	Claim     string  `json:"claim"`
 	Source    string  `json:"source"`
 	Relevance float64 `json:"relevance"`
@@ -38,16 +53,19 @@ type ResearchFinding struct {
 
 // ResearchResponse contains the full results of a completed research job.
 type ResearchResponse struct {
-	ID            string            `json:"id"`
-	Query         string            `json:"query"`
-	Status        string            `json:"status"`
-	Report        string            `json:"report,omitempty"`
-	Sources       []ResearchSource  `json:"sources,omitempty"`
-	Findings      []ResearchFinding `json:"findings,omitempty"`
-	SourcesCount  int               `json:"sources_count,omitempty"`
-	FindingsCount int               `json:"findings_count,omitempty"`
-	Iterations    int               `json:"iterations,omitempty"`
-	ElapsedMs     int64             `json:"elapsed_ms,omitempty"`
+	TotalPagesAnalyzed int               `json:"total_pages_analyzed"`
+	CreatedAt          string            `json:"created_at"`
+	Error              string            `json:"error,omitempty"`
+	ID                 string            `json:"id"`
+	Query              string            `json:"query"`
+	Status             string            `json:"status"`
+	Report             string            `json:"report,omitempty"`
+	Sources            []ResearchSource  `json:"sources,omitempty"`
+	Findings           []ResearchFinding `json:"findings,omitempty"`
+	SourcesCount       int               `json:"sources_count,omitempty"`
+	FindingsCount      int               `json:"findings_count,omitempty"`
+	Iterations         int               `json:"iterations,omitempty"`
+	ElapsedMs          int64             `json:"elapsed_ms,omitempty"`
 	// Deprecated: research always runs in deep mode; this flag is ignored by the API.
 	Deep bool `json:"deep,omitempty"`
 }

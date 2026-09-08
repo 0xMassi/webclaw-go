@@ -1221,3 +1221,93 @@ func TestScrape_MixedExtraction(t *testing.T) {
 		t.Errorf("mixed output lost: %#v", resp)
 	}
 }
+
+func TestMapCursorAndScrapeOptions(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		switch r.URL.Path {
+		case "/v1/map":
+			if body["cursor"] != "page/2" || body["search"] != "docs" || body["limit"] != float64(1) {
+				t.Errorf("map request: %v", body)
+			}
+			fmt.Fprint(w, `{"urls":["https://example.com/docs"],"count":1,"next_cursor":"page/3","total_indexed":4,"cached":true}`)
+		case "/v1/scrape":
+			if body["mobile"] != true || body["max_cache_age"] != float64(0) {
+				t.Errorf("scrape request: %v", body)
+			}
+			fmt.Fprint(w, `{"url":"https://example.com","rawHtml":"<a>Docs</a>","attributes":[{"selector":"a","attribute":"href","values":["/docs"]}],"engine":{"engine":"http"},"mobile":true}`)
+		default:
+			t.Errorf("unexpected route: %s", r.URL.Path)
+		}
+	})
+	page, err := client.Map(context.Background(), &MapRequest{URL: "https://example.com", Search: "docs", Limit: 1, Cursor: "page/2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.NextCursor == nil || *page.NextCursor != "page/3" || page.TotalIndexed != 4 || !page.Cached {
+		t.Fatalf("map data lost: %+v", page)
+	}
+	zero := uint64(0)
+	scrape, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://example.com", Formats: []Format{FormatRawHTML, FormatAttributes}, Mobile: true, MaxCacheAge: &zero, AttributeSelectors: []AttributeSelector{{Selector: "a", Attribute: "href"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scrape.RawHTML != "<a>Docs</a>" || len(scrape.Attributes) != 1 || string(scrape.Engine) != `{"engine":"http"}` {
+		t.Fatalf("scrape data lost: %+v", scrape)
+	}
+}
+
+func TestResearchEvidenceAndInterruptedCrawl(t *testing.T) {
+	var polls atomic.Int32
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v1/crawl/") {
+			polls.Add(1)
+			fmt.Fprint(w, `{"id":"c1","status":"interrupted","pages":[]}`)
+			return
+		}
+		fmt.Fprint(w, `{"id":"r1","status":"completed","report":"Saved","sources":[{"url":"https://example.com","title":"Example","words":12,"excerpt":"Example Domain","retrieved_at":"today","truncated":false,"content_sha256":"hash"}],"findings":[{"fact":"Example","source_url":"https://example.com","confidence":"high","evidence":[{"source_url":"https://example.com","quote":"Example Domain"}]}],"total_pages_analyzed":1,"created_at":"today"}`)
+	})
+	result, err := client.WaitForCompletion(context.Background(), "c1", &CrawlPollOptions{Interval: time.Millisecond, Timeout: 50 * time.Millisecond})
+	if err != nil || result.Status != CrawlStatusInterrupted || polls.Load() != 1 {
+		t.Fatalf("interrupted crawl did not terminate: %v", err)
+	}
+	report, err := client.GetResearchStatus(context.Background(), "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Findings[0].Fact != "Example" || report.Findings[0].Evidence[0].Quote != "Example Domain" || report.Sources[0].ContentSHA256 != "hash" || report.TotalPagesAnalyzed != 1 {
+		t.Fatalf("research data lost: %+v", report)
+	}
+}
+
+func TestWatchContract(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/watch":
+			fmt.Fprint(w, `{"watches":[{"id":"watch_1","url":"https://example.com","active":true,"last_checked_at":null}]}`)
+		case "/v1/watch/watch_1":
+			fmt.Fprint(w, `{"id":"watch_1","url":"https://example.com","active":true,"last_changed_at":null,"snapshots":[{"id":"snap_1","links_added":2,"links_removed":1}]}`)
+		case "/v1/watch/watch_1/check":
+			fmt.Fprint(w, `{"status":"checking"}`)
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	})
+	list, err := client.WatchList(context.Background(), 10, 0)
+	if err != nil || len(list.Watches) != 1 || !list.Watches[0].Active {
+		t.Fatalf("list=%+v err=%v", list, err)
+	}
+	detail, err := client.WatchGet(context.Background(), list.Watches[0].ID)
+	if err != nil || len(detail.Snapshots) != 1 || detail.Snapshots[0].LinksAdded != 2 || detail.LastChangedAt != "" {
+		t.Fatalf("detail=%+v err=%v", detail, err)
+	}
+	check, err := client.WatchCheck(context.Background(), detail.ID)
+	if err != nil || check.Status != "checking" {
+		t.Fatalf("check=%+v err=%v", check, err)
+	}
+}
