@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -774,13 +775,57 @@ func TestSummarize_Success(t *testing.T) {
 	}
 }
 
+func TestDiff_CapturedResponse(t *testing.T) {
+	response, err := os.ReadFile("testdata/diff-changed.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousJSON, err := os.ReadFile("testdata/diff-previous.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var previous map[string]interface{}
+	if err := json.Unmarshal(previousJSON, &previous); err != nil {
+		t.Fatal(err)
+	}
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		if r.Method != "POST" || r.URL.Path != "/v1/diff" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+			return
+		}
+		if !reflect.DeepEqual(body, map[string]interface{}{"url": "https://example.com", "previous": previous}) {
+			t.Errorf("unexpected request: %#v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(response)
+	})
+	result, err := client.Diff(context.Background(), &DiffRequest{URL: "https://example.com", Previous: previous})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "Changed" || result.TextDiff == nil || !strings.Contains(*result.TextDiff, "-# Previous fixture") || result.WordCountDelta != 13 {
+		t.Fatalf("lost diff content: %+v", result)
+	}
+	if len(result.LinksAdded) != 1 || result.LinksAdded[0].Href != "https://iana.org/domains/example" || len(result.LinksRemoved) != 0 {
+		t.Errorf("lost links: %+v", result)
+	}
+	if len(result.MetadataChanges) != 1 || result.MetadataChanges[0].Old == nil || *result.MetadataChanges[0].Old != "Previous fixture" || result.MetadataChanges[0].New == nil || *result.MetadataChanges[0].New != "Example Domain" {
+		t.Errorf("lost metadata: %+v", result)
+	}
+}
+
 // --- Brand ---
 
 func TestBrand_Success(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		assertAuth(t, r)
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"name":"Acme","logo":"https://acme.com/logo.png","colors":["#fff","#000"]}`)
+		fmt.Fprint(w, `{"name":"Acme","logo_url":"https://acme.com/logo.png","colors":[{"hex":"#ffffff","usage":"Background","count":2}]}`)
 	})
 
 	resp, err := client.Brand(context.Background(), &BrandRequest{URL: "https://acme.com"})
@@ -789,9 +834,13 @@ func TestBrand_Success(t *testing.T) {
 	}
 
 	var brand struct {
-		Name   string   `json:"name"`
-		Logo   string   `json:"logo"`
-		Colors []string `json:"colors"`
+		Name   string `json:"name"`
+		Logo   string `json:"logo_url"`
+		Colors []struct {
+			Hex   string `json:"hex"`
+			Usage string `json:"usage"`
+			Count int    `json:"count"`
+		} `json:"colors"`
 	}
 	if err := resp.Decode(&brand); err != nil {
 		t.Fatalf("Decode: %v", err)
@@ -799,7 +848,7 @@ func TestBrand_Success(t *testing.T) {
 	if brand.Name != "Acme" {
 		t.Errorf("Name = %q", brand.Name)
 	}
-	if len(brand.Colors) != 2 {
+	if len(brand.Colors) != 1 || brand.Colors[0].Hex != "#ffffff" || brand.Colors[0].Usage != "Background" || brand.Colors[0].Count != 2 {
 		t.Errorf("Colors = %v", brand.Colors)
 	}
 }

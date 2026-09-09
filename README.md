@@ -103,7 +103,7 @@ fmt.Println(result.Cache.Status) // "hit", "miss", or "bypass"
 
 ### Vertical extractors
 
-28 site-specific extractors that return typed JSON (GitHub, Reddit, Amazon, YouTube, PyPI, HuggingFace, Trustpilot, etc.) instead of generic markdown. See the [catalog](https://webclaw.io/docs/api/vertical) for the full list.
+Site-specific extractors return structured JSON (GitHub, Reddit, Amazon, YouTube, PyPI, HuggingFace, Trustpilot, etc.) instead of generic markdown. See the [catalog](https://webclaw.io/docs/api/vertical) for the full list.
 
 ```go
 // Discover available extractors
@@ -317,8 +317,12 @@ fmt.Println(string(result.Data))
 
 // Decode into a custom struct
 var brand struct {
-    Name   string   `json:"name"`
-    Colors []string `json:"colors"`
+    Name string `json:"name"`
+    Colors []struct {
+        Hex   string `json:"hex"`
+        Usage string `json:"usage"`
+        Count int    `json:"count"`
+    } `json:"colors"`
 }
 if err := result.Decode(&brand); err != nil {
     log.Fatal(err)
@@ -328,21 +332,28 @@ fmt.Println(brand.Name, brand.Colors)
 
 ### Diff
 
-Compare the current state of a page against a previous snapshot to detect changes.
+Compare a page with your most recent cached extraction. Use the same API account for both calls; a missing or expired baseline returns an error.
 
 ```go
-result, err := client.Diff(ctx, &webclaw.DiffRequest{
-    URL: "https://example.com/pricing",
-    Previous: map[string]interface{}{
-        "title": "Old Pricing Page",
-        "price": "$9.99",
-    },
+// Establish the cached baseline once, then check for changes later.
+_, err := client.Scrape(ctx, &webclaw.ScrapeRequest{
+    URL: "https://example.com", Formats: []webclaw.Format{webclaw.FormatJSON},
 })
 if err != nil {
     log.Fatal(err)
 }
-fmt.Println(result.Changes)
+result, err := client.Diff(ctx, &webclaw.DiffRequest{URL: "https://example.com"})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(result.Status) // Same, Changed, or New
+if result.TextDiff != nil {
+    fmt.Println(*result.TextDiff)
+}
+fmt.Println(result.MetadataChanges)
 ```
+
+To compare against a saved baseline instead, decode its complete `Extraction` into `Previous`, including `metadata` and `content`. An arbitrary title/body object is not accepted.
 
 ### Research
 
