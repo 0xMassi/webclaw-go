@@ -247,46 +247,6 @@ result, err = client.Extract(ctx, &webclaw.ExtractRequest{
 })
 ```
 
-### Lead Enrichment API
-
-Turn a company URL into a structured sales lead: company name, summary, socials, tech stack, pricing plans, categorized contact emails, and the founders behind the company — each with their LinkedIn and X profiles when discoverable. `PeopleSource` reports how the founder list was resolved.
-
-**Billing:** a flat **100 credits** per successful lead.
-
-```go
-result, err := client.Lead(ctx, &webclaw.LeadRequest{
-    URL: "https://resend.com",
-})
-if err != nil {
-    log.Fatal(err)
-}
-
-lead := result.Lead
-fmt.Printf("%s (%s) — %s\n", lead.CompanyName, result.Domain, lead.Summary)
-fmt.Printf("Socials: linkedin=%s x=%s github=%s\n", lead.Socials.LinkedIn, lead.Socials.X, lead.Socials.GitHub)
-fmt.Println("Tech:", lead.Tech)
-
-for _, p := range lead.Pricing {
-    fmt.Printf("  plan %s — %s\n", p.Plan, p.Price)
-}
-for _, e := range lead.Emails {
-    fmt.Printf("  %s: %s\n", e.Type, e.Email)
-}
-for _, person := range lead.People {
-    linkedin, x := "", ""
-    if person.LinkedIn != nil {
-        linkedin = *person.LinkedIn
-    }
-    if person.X != nil {
-        x = *person.X
-    }
-    fmt.Printf("  %s — %s (linkedin=%s x=%s)\n", person.Name, person.Role, linkedin, x)
-}
-
-fmt.Printf("People source: %s\n", result.PeopleSource)
-fmt.Printf("Cache: %s, Credits: %d\n", result.Cache, result.Credits)
-```
-
 ### Summarize
 
 Generate a plain-text summary of a page.
@@ -674,7 +634,6 @@ if err != nil {
 | `Endpoints` | `(ctx, *EndpointsRequest) (*EndpointsResponse, error)` | Discover API endpoints in page JS |
 | `Batch` | `(ctx, *BatchRequest) (*BatchResponse, error)` | Multi-URL parallel scrape |
 | `Extract` | `(ctx, *ExtractRequest) (*ExtractResponse, error)` | LLM structured extraction |
-| `Lead` | `(ctx, *LeadRequest) (*LeadResponse, error)` | Lead enrichment (100 credits/lead) |
 | `Summarize` | `(ctx, *SummarizeRequest) (*SummarizeResponse, error)` | Page summarization |
 | `Brand` | `(ctx, *BrandRequest) (*BrandResponse, error)` | Brand identity extraction |
 | `Diff` | `(ctx, *DiffRequest) (*DiffResponse, error)` | Content change detection |
