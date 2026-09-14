@@ -26,7 +26,7 @@ const (
 //
 // This is the X analog of WatchCreateRequest. It is a paid-only feature: the
 // API returns 403 for free or lapsed accounts. Each check (automated or
-// manual via XMonitorCheck) costs one credit, and a user may hold at most 50
+// manual via XMonitorCheck) uses the plan-specific credit rate, and a user may hold at most 50
 // monitors.
 //
 // The pointer-typed booleans (IncludeRetweets, IncludeReplies, IncludeQuotes)
@@ -83,6 +83,8 @@ type XMonitor struct {
 	LastCheckedAt   string `json:"last_checked_at,omitempty"`
 	LastMatchedAt   string `json:"last_matched_at,omitempty"`
 	CreatedAt       string `json:"created_at,omitempty"`
+	// Checks contains up to 20 saved results on GetXMonitor responses.
+	Checks []map[string]any `json:"checks,omitempty"`
 }
 
 // XMonitorListResponse is the paginated list of X monitors.

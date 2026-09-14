@@ -1195,3 +1195,20 @@ func TestWatchContract(t *testing.T) {
 		t.Fatalf("check=%+v err=%v", check, err)
 	}
 }
+
+func TestGetXMonitorRetainsSavedChecks(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		assertAuth(t, r)
+		if r.URL.Path != "/v1/x/monitors/monitor-1" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"id":"monitor-1","checks":[{"id":"check-1","result":{"baseline":true}}]}`)
+	})
+	monitor, err := client.GetXMonitor(context.Background(), "monitor-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(monitor.Checks) != 1 || monitor.Checks[0]["id"] != "check-1" {
+		t.Fatalf("saved checks were lost: %#v", monitor.Checks)
+	}
+}
