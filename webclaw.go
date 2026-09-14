@@ -117,6 +117,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any, dst any)
 
 		resp, err := c.http.Do(req)
 		if err != nil {
+			// Cancellation must have the same result before and during dispatch.
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if method == http.MethodGet && attempt < maxGETRetries && ctx.Err() == nil {
 				if err := waitForRetry(ctx, retryDelay(attempt, "")); err != nil {
 					return err
