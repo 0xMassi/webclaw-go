@@ -129,10 +129,16 @@ type ScrapeResponse struct {
 	Attributes       []map[string]any `json:"attributes,omitempty"`
 	QueryAnswer      *string          `json:"query_answer,omitempty"`
 	Screenshot       string           `json:"screenshot,omitempty"`
-	ActionsPerformed int              `json:"actions_performed,omitempty"`
+	ActionsPerformed []ActionResult   `json:"actions_performed,omitempty"`
 	Mobile           bool             `json:"mobile,omitempty"`
 	StructuredData   json.RawMessage  `json:"structured_data,omitempty"`
 	Engine           json.RawMessage  `json:"engine,omitempty"`
+}
+
+type ActionResult struct {
+	Action  string `json:"action"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
 }
 
 // --- Crawl ---
