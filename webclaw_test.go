@@ -1212,3 +1212,15 @@ func TestGetXMonitorRetainsSavedChecks(t *testing.T) {
 		t.Fatalf("saved checks were lost: %#v", monitor.Checks)
 	}
 }
+
+func TestScrapeResponseDecodesActionResults(t *testing.T) {
+	var resp ScrapeResponse
+	body := `{"url":"https://example.com","actions_performed":[{"action":"click","success":true},{"action":"waitForSelector","success":false,"error":"timeout"}]}`
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []ActionResult{{Action: "click", Success: true}, {Action: "waitForSelector", Success: false, Error: "timeout"}}
+	if !reflect.DeepEqual(resp.ActionsPerformed, want) {
+		t.Fatalf("ActionsPerformed = %+v, want %+v", resp.ActionsPerformed, want)
+	}
+}
