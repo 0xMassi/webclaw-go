@@ -9,9 +9,15 @@ import (
 type APIError struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
+	// RequestID is the server request id from the X-Request-Id header or the
+	// error body's request_id. Empty when the API returned neither.
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func (e *APIError) Error() string {
+	if e.RequestID != "" {
+		return fmt.Sprintf("webclaw: HTTP %d — %s (request id: %s)", e.StatusCode, e.Message, e.RequestID)
+	}
 	return fmt.Sprintf("webclaw: HTTP %d — %s", e.StatusCode, e.Message)
 }
 

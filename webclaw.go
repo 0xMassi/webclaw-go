@@ -188,29 +188,29 @@ func decodeResponse(resp *http.Response, dst any) error {
 	respBody, err := readBodyWithLimit(resp.Body, limit)
 	if err != nil {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return &APIError{StatusCode: resp.StatusCode, Message: err.Error()}
+			return &APIError{StatusCode: resp.StatusCode, Message: err.Error(), RequestID: resp.Header.Get("X-Request-Id")}
 		}
 		return fmt.Errorf("webclaw: read response: %w", err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		// Try to extract a message from the response JSON.
+		apiErr := &APIError{StatusCode: resp.StatusCode, RequestID: resp.Header.Get("X-Request-Id")}
 		var errResp struct {
-			Message string `json:"message"`
-			Error   string `json:"error"`
+			Message   string `json:"message"`
+			Error     string `json:"error"`
+			RequestID string `json:"request_id"`
 		}
-		if json.Unmarshal(respBody, &errResp) == nil && (errResp.Message != "" || errResp.Error != "") {
+		decoded := json.Unmarshal(respBody, &errResp) == nil
+		if apiErr.RequestID == "" && decoded {
+			apiErr.RequestID = errResp.RequestID
+		}
+		if decoded && (errResp.Message != "" || errResp.Error != "") {
 			if errResp.Message != "" {
 				apiErr.Message = errResp.Message
 			} else {
 				apiErr.Message = errResp.Error
 			}
 		} else if len(respBody) > 0 {
-			// Unmarshal succeeded but both fields were empty (e.g. body was
-			// "true", "42", or an object with different field names), or
-			// unmarshal failed entirely. Use the raw body as the message,
-			// capped so a misbehaving upstream can't bloat the error string.
 			apiErr.Message = truncate(string(respBody), maxErrBodyLen)
 		} else {
 			apiErr.Message = http.StatusText(resp.StatusCode)

@@ -3,6 +3,7 @@ package webclaw
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -1222,5 +1223,51 @@ func TestScrapeResponseDecodesActionResults(t *testing.T) {
 	want := []ActionResult{{Action: "click", Success: true}, {Action: "waitForSelector", Success: false, Error: "timeout"}}
 	if !reflect.DeepEqual(resp.ActionsPerformed, want) {
 		t.Fatalf("ActionsPerformed = %+v, want %+v", resp.ActionsPerformed, want)
+	}
+}
+
+func TestAPIError_RequestIDFromHeader(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Id", "hdr-id")
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode(map[string]string{"error": "boom", "request_id": "body-id"})
+	})
+
+	_, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://x.com"})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.RequestID != "hdr-id" {
+		t.Errorf("RequestID = %q, want hdr-id", apiErr.RequestID)
+	}
+	if want := "webclaw: HTTP 500 — boom (request id: hdr-id)"; apiErr.Error() != want {
+		t.Errorf("Error() = %q, want %q", apiErr.Error(), want)
+	}
+}
+
+func TestAPIError_RequestIDFromBody(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		json.NewEncoder(w).Encode(map[string]string{"error": "gone", "request_id": "body-id"})
+	})
+
+	_, err := client.Scrape(context.Background(), &ScrapeRequest{URL: "https://x.com"})
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.RequestID != "body-id" {
+		t.Errorf("RequestID = %q, want body-id", apiErr.RequestID)
+	}
+	if apiErr.Message != "gone" {
+		t.Errorf("Message = %q", apiErr.Message)
+	}
+}
+
+func TestAPIError_RequestIDAbsent(t *testing.T) {
+	e := &APIError{StatusCode: 400, Message: "bad"}
+	if want := "webclaw: HTTP 400 — bad"; e.Error() != want {
+		t.Errorf("Error() = %q, want %q", e.Error(), want)
 	}
 }

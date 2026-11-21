@@ -614,7 +614,7 @@ if err != nil {
         // Generic API error
         var apiErr *webclaw.APIError
         if errors.As(err, &apiErr) {
-            log.Printf("API error %d: %s\n", apiErr.StatusCode, apiErr.Message)
+            log.Printf("API error %d: %s (request id %q)\n", apiErr.StatusCode, apiErr.Message, apiErr.RequestID)
         } else {
             // Network or other non-API error
             log.Printf("Request failed: %v\n", err)
@@ -623,6 +623,8 @@ if err != nil {
     return
 }
 ```
+
+`apiErr.RequestID` holds the server request id when there is one (from the `X-Request-Id` header, or `request_id` in the error body), and `err.Error()` ends with `(request id: ...)`. Log it and quote it when contacting support. Early rejections (400 validation, 401, 429) may have none, in which case it is `""`.
 
 ## All Methods
 
